@@ -7,26 +7,29 @@ from pythonping import ping
 import asyncio
 import json
 from math import floor
-from sys import stdout
-from pythonping.utils import random_text
+import sys
 
 logging.basicConfig(level=logging.INFO)
 
 
 def sync_ping(target):
-    logging.info(f">>>START PING {target}...")
-    result = ping(target, count=10)
-    logging.info(
-        f"<<<DONE PING {target}, {result.rtt_min_ms}/{result.rtt_avg_ms}/{result.rtt_max_ms}/"
-        f"{100*round(result.packets_lost, 2)}%"
-    )
-    return {
-        "host": target,
-        "min": result.rtt_min_ms,
-        "max": result.rtt_max_ms,
-        "avg": result.rtt_avg_ms,
-        "loss": result.packets_lost,
-    }
+    try:
+        logging.info(f">>>START PING {target}...")
+        result = ping(target, count=10)
+        logging.info(
+            f"<<<DONE PING {target}, {result.rtt_min_ms}/{result.rtt_avg_ms}/{result.rtt_max_ms}/"
+            f"{100*round(result.packets_lost, 2)}%"
+        )
+        return {
+            "host": target,
+            "min": result.rtt_min_ms,
+            "max": result.rtt_max_ms,
+            "avg": result.rtt_avg_ms,
+            "loss": result.packets_lost,
+        }
+    except Exception as e:
+        logging.error(e)
+        return {"host": target, "error": str(e)}
 
 
 def sync_detect_mtu(target):
@@ -131,21 +134,23 @@ def run_speedtest():
 
 async def scan_network():
     loop = asyncio.get_event_loop()
+
     results = await asyncio.gather(
         loop.run_in_executor(None, run_speedtest),
         scan_for_wifi(),
+        loop.run_in_executor(None, sync_detect_mtu, "8.8.8.8"),
         loop.run_in_executor(None, sync_ping, "8.8.8.8"),
         loop.run_in_executor(None, sync_ping, "192.168.1.1"),
-        loop.run_in_executor(None, sync_detect_mtu, "8.8.8.8"),
+        # loop.run_in_executor(None, sync_ping, "2001:4860:4860::8888")
     )
 
     now = int(time.time())
     message = {
-        "timestamp": now,
-        "speedtest": results[0],
+        "tstamp": now,
+        "speed": results[0],
         "wifi": results[1],
-        "ping": results[2:3],
-        "MTU": results[4],
+        "MTU": results[2],
+        "ping": results[3:],
     }
 
     logging.info(message)
