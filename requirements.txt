@@ -1,0 +1,5 @@
+google-cloud-firestore
+speedtest-cli
+ruamel.yaml
+pythonping
+black
