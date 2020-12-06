@@ -1,15 +1,25 @@
-#!/usr/bin/env python
-
 from speedtest import Speedtest
 import time
-import logging
 from pythonping import ping
-import asyncio
 import json
 from math import floor
-import sys
+from .config import get_config, IP_REFLECTOR
+from aiohttp import ClientSession
+import asyncio
+import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format="[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s", level=logging.INFO
+)
+probe_semaphore = asyncio.Semaphore(1)
+
+
+async def get_my_ip():
+    ip_reflector = get_config(IP_REFLECTOR)
+    async with ClientSession() as session:
+        async with session.get(ip_reflector) as response:
+            data = await response.json()
+            return data.get("ipv4")
 
 
 def sync_ping(target):
@@ -132,34 +142,35 @@ def run_speedtest():
     return result
 
 
-async def scan_network():
-    loop = asyncio.get_event_loop()
+async def run_probes():
+    async with probe_semaphore:
+        loop = asyncio.get_event_loop()
 
-    results = await asyncio.gather(
-        loop.run_in_executor(None, run_speedtest),
-        scan_for_wifi(),
-        loop.run_in_executor(None, sync_detect_mtu, "8.8.8.8"),
-        loop.run_in_executor(None, sync_ping, "8.8.8.8"),
-        loop.run_in_executor(None, sync_ping, "192.168.1.1"),
-        # loop.run_in_executor(None, sync_ping, "2001:4860:4860::8888")
-    )
+        results = await asyncio.gather(
+            loop.run_in_executor(None, run_speedtest),
+            scan_for_wifi(),
+            loop.run_in_executor(None, sync_detect_mtu, "8.8.8.8"),
+            loop.run_in_executor(None, sync_ping, "8.8.8.8"),
+            loop.run_in_executor(None, sync_ping, "192.168.1.1"),
+            # loop.run_in_executor(None, sync_ping, "2001:4860:4860::8888")
+        )
 
-    now = int(time.time())
-    message = {
-        "tstamp": now,
-        "speed": results[0],
-        "wifi": results[1],
-        "MTU": results[2],
-        "ping": results[3:],
-    }
+        now = int(time.time())
+        message = {
+            "tstamp": now,
+            "speed": results[0],
+            "wifi": results[1],
+            "MTU": results[2],
+            "ping": results[3:],
+        }
 
-    logging.info(message)
+        logging.info(message)
 
-    resultstr = json.dumps(message)
-    logging.info(f"Size of result info: {len(resultstr.encode('utf-8'))}")
+        resultstr = json.dumps(message)
+        logging.info(f"Size of result info: {len(resultstr.encode('utf-8'))}")
 
-    return message
+        return message
 
 
 if __name__ == "__main__":
-    asyncio.run(scan_network())
+    asyncio.run(run_probes())

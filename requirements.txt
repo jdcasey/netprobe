@@ -2,4 +2,8 @@ google-cloud-firestore
 speedtest-cli
 ruamel.yaml
 pythonping
+telethon
+aiohttp
+aiofiles
+click
 black
