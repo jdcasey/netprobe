@@ -3,9 +3,10 @@
 import asyncio
 import click
 from .control import start_telegram
-from .config import load_config, get_config
+from .config import load_config
 from .reporter import report_loop
 import logging
+from time import sleep
 
 logging.basicConfig(
     format="[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s", level=logging.INFO
@@ -16,11 +17,16 @@ logging.basicConfig(
 @click.argument("config_file")
 def run(config_file):
     load_config(config_file)
-    loop = asyncio.get_event_loop()
-    # asyncio.gather(loop.run_in_executor(None, start_telegram), report_loop())
 
-    logging.info("Starting reporting loop")
-    loop.create_task(report_loop())
+    loop = asyncio.get_event_loop()
+    logging.info(f"Command loop: {loop}")
 
     logging.info("Starting Telegram client")
-    start_telegram()
+    logging.info("Starting reporting loop")
+    asyncio.gather(
+        start_telegram(),
+        report_loop()
+    )
+
+    loop.run_forever()
+

@@ -7,11 +7,13 @@ from .config import get_config, IP_REFLECTOR
 from aiohttp import ClientSession
 import asyncio
 import logging
+from datetime import datetime
 
 logging.basicConfig(
     format="[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s", level=logging.INFO
 )
 probe_semaphore = asyncio.Semaphore(1)
+started = datetime.now()
 
 
 async def get_my_ip():
@@ -20,6 +22,27 @@ async def get_my_ip():
         async with session.get(ip_reflector) as response:
             data = await response.json()
             return data.get("ipv4")
+
+
+async def machine_uptime():
+    process = await asyncio.create_subprocess_shell(
+        "uptime --pretty",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    scan_output, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        logging.error(
+            f"Failed to read machine uptime: {stderr.decode('utf-8').strip()}"
+        )
+        return "Command failed."
+    else:
+        return scan_output.decode("utf-8")
+
+
+def service_uptime():
+    return datetime.now() - started
 
 
 def sync_ping(target):
