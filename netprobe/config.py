@@ -16,6 +16,9 @@ TELEGRAM_API_ID = "telegram-api-id"
 TELEGRAM_API_HASH = "telegram-api-hash"
 TELEGRAM_NODE_NAME = "telegram-node-name"
 
+ANNOUNCE_START = 'announce-on-start'
+DEFAULT_ANNOUNCE_START = False
+
 config = dict()
 config_location = None
 
