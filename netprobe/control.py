@@ -45,14 +45,14 @@ async def start_telegram():
     client.add_event_handler(rollcall, events.NewMessage(pattern=r".*roll\s?call.*"))
     client.add_event_handler(time_reply, events.NewMessage(pattern=r".*time.*"))
     client.add_event_handler(
-        get_probe_handler,
+        handle_get_last_probe,
         events.NewMessage(pattern=r".*(get )?(latest|last) (probe|report).*"),
     )
     client.add_event_handler(
-        run_probe_handler, events.NewMessage(pattern=r".*run probe.*")
+        handle_run_probe, events.NewMessage(pattern=r".*run probe.*")
     )
     client.add_event_handler(
-        get_ip_address,
+        handle_get_ip,
         events.NewMessage(pattern=r".*get [iI][pP].*"),
     )
     client.add_event_handler(
@@ -103,13 +103,22 @@ def _adjust_report(data):
 
 
 async def handle_reboot(event):
+    logging.warning("Rebooting system!")
     message = await reboot()
     await event.reply(f"`{message}`")
 
 
 async def handle_help(event):
     handlers = event.client.list_event_handlers()
-    message = "\n".join([f"`{handler.__name__}`" for handler, _ in handlers])
+    names = []
+    for handler, _ in handlers:
+        name = handler.__name__
+        if name.startswith("handle_"):
+            name = name[len("handle_"):]
+        name = name.replace("_", " ")
+        names.append(name)
+
+    message = "\n".join(names)
     await event.reply(message)
 
 
@@ -119,6 +128,7 @@ async def handle_pip_list(event):
 
 
 async def handle_pip_upgrade(event):
+    logging.warning("Upgrading pip packages and restarting service!")
     package_list = await upgrade_packages()
     sender = await event.get_sender()
     await event.client.send_file(
@@ -150,7 +160,7 @@ async def time_reply(event):
         )
 
 
-async def get_probe_handler(event):
+async def handle_get_last_probe(event):
     if await _directed_at_me(event):
         await event.reply("Gathering / running probe...please stand by")
         report = get_latest_report()
@@ -165,7 +175,7 @@ async def get_probe_handler(event):
         await event.reply(f"{rendered}")
 
 
-async def run_probe_handler(event):
+async def handle_run_probe(event):
     if await _directed_at_me(event):
         await event.reply("Running network probe...please stand by")
         report = await run_probes()
@@ -174,7 +184,7 @@ async def run_probe_handler(event):
         await event.reply(f"{rendered}")
 
 
-async def get_ip_address(event):
+async def handle_get_ip(event):
     if await _directed_at_me(event):
         scan = await get_my_ip()
         await event.reply(f"{scan}")
