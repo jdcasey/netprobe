@@ -5,7 +5,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='netprobe',
-    version='0.1.0',
+    version='1.0.0',
     packages=[''],
     url='https://github.com/jdcasey/netprobe',
     license='GPLv3',
