@@ -5,7 +5,7 @@ on: push
 jobs:
   build-and-push:
     name: Publish to PyPI
-    runs-on: debian-latest
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v2
