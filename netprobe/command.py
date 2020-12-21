@@ -6,7 +6,6 @@ from .control import start_telegram
 from .config import load_config
 from .reporter import report_loop
 import logging
-from time import sleep
 
 logging.basicConfig(
     format="[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s", level=logging.INFO

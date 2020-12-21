@@ -8,13 +8,19 @@ logging.basicConfig(
 
 IP_REFLECTOR = "myip-url"
 
+WIFI_DEVICE = "wifi-device"
+DEFAULT_WIFI_DEVICE = "wlan0"
+
 REPORTER_TIMEOUT = "report-period-secs"
 DEFAULT_REPORTER_TIMEOUT = 300
 
 TELEGRAM_SESSION_ID = "telegram-session-id"
 TELEGRAM_API_ID = "telegram-api-id"
 TELEGRAM_API_HASH = "telegram-api-hash"
-TELEGRAM_NODE_NAME = "telegram-node-name"
+NODE_NAME = "telegram-node-name"
+
+WRITER_COUNT = "writers"
+DEFAULT_WRITER_COUNT = 2
 
 ANNOUNCE_START = 'announce-on-start'
 DEFAULT_ANNOUNCE_START = False

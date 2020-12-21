@@ -13,6 +13,10 @@ def timestamp(seconds):
     return str(datetime.datetime.fromtimestamp(seconds))
 
 
+def timedelta(seconds):
+    return str(datetime.timedelta(seconds=seconds))
+
+
 def percent(val):
     if float(val) <= 1.0:
         return f"{round(float(float(val)*100))}%"

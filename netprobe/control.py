@@ -2,7 +2,7 @@ from telethon import TelegramClient, events
 from telethon.tl.types import MessageEntityMention
 from telethon.sessions import StringSession
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio
 from .probe import run_probes, get_my_ip, service_uptime, machine_uptime
 from .config import (
@@ -12,7 +12,7 @@ from .config import (
     TELEGRAM_SESSION_ID,
     TELEGRAM_API_ID,
     TELEGRAM_API_HASH,
-    TELEGRAM_NODE_NAME,
+    NODE_NAME,
 )
 from .formatter import format
 from .reporter import get_latest_report
@@ -72,7 +72,7 @@ async def start_telegram():
 
     if bool(get_config(ANNOUNCE_START) or DEFAULT_ANNOUNCE_START) is True:
         await client.send_message(
-            "@buildchimp", f"*{get_config(TELEGRAM_NODE_NAME)}* is online! 🎉"
+            "@buildchimp", f"*{get_config(NODE_NAME)}* is online! 🎉"
         )
 
     logging.info("Telegram client should be running.")
@@ -81,7 +81,7 @@ async def start_telegram():
 
 async def _directed_at_me(event):
     global client
-    node_name = get_config(TELEGRAM_NODE_NAME)
+    node_name = get_config(NODE_NAME)
     logging.warning(f"Handle for node: {node_name}: {event.raw_text}")
 
     me = await client.get_me()
@@ -141,7 +141,7 @@ async def handle_pip_upgrade(event):
 
 
 async def rollcall(event):
-    node_name = get_config(TELEGRAM_NODE_NAME)
+    node_name = get_config(NODE_NAME)
     for e, txt in event.get_entities_text():
         print(type(e))
 
@@ -154,9 +154,8 @@ async def time_reply(event):
         await event.reply(
             f"`Local:` **{datetime.now()}**\n"
             f"`UTC:  ` **{datetime.utcnow()}**\n"
-            f"`Service Uptime:` **{service_uptime()}**\n\n"
-            f"`Machine Uptime:`\n"
-            f"`{await machine_uptime()}`"
+            f"`Service Uptime:` **{timedelta(seconds=await service_uptime())}**\n"
+            f"`Machine Uptime:` **{timedelta(seconds=await machine_uptime())}**"
         )
 
 

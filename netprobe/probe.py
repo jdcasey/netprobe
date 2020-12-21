@@ -1,13 +1,16 @@
+from .config import get_config, IP_REFLECTOR, WIFI_DEVICE, DEFAULT_WIFI_DEVICE
+from .database import record_speed, record_ping, record_wifi, record_machine_info
 from speedtest import Speedtest
-import time
 from pythonping import ping
-import json
+import re
 from math import floor
-from .config import get_config, IP_REFLECTOR
 from aiohttp import ClientSession
 import asyncio
 import logging
 from datetime import datetime
+import time
+
+NMCLI_CMD = "nmcli -t -f ssid,signal,chan device wifi list"
 
 logging.basicConfig(
     format="[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s", level=logging.INFO
@@ -25,27 +28,16 @@ async def get_my_ip():
 
 
 async def machine_uptime():
-    process = await asyncio.create_subprocess_shell(
-        "uptime --pretty",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    scan_output, stderr = await process.communicate()
-
-    if process.returncode != 0:
-        logging.error(
-            f"Failed to read machine uptime: {stderr.decode('utf-8').strip()}"
-        )
-        return "Command failed."
-    else:
-        return scan_output.decode("utf-8")
+    with open("/proc/uptime") as f:
+        return float(f.readlines()[0].rstrip().split(" ")[0])
 
 
-def service_uptime():
-    return datetime.now() - started
+async def service_uptime():
+    td = datetime.now() - started
+    return td.total_seconds()
 
 
-def sync_ping(target):
+async def run_ping(target):
     try:
         logging.info(f">>>START PING {target}...")
         result = ping(target, count=10)
@@ -53,60 +45,132 @@ def sync_ping(target):
             f"<<<DONE PING {target}, {result.rtt_min_ms}/{result.rtt_avg_ms}/{result.rtt_max_ms}/"
             f"{100*round(result.packets_lost, 2)}%"
         )
-        return {
+        result = {
             "host": target,
+            "tstamp": get_timestamp(),
             "min": result.rtt_min_ms,
             "max": result.rtt_max_ms,
             "avg": result.rtt_avg_ms,
             "loss": result.packets_lost,
         }
+
+        await record_ping(result)
+        return result
     except Exception as e:
         logging.error(e)
         return {"host": target, "error": str(e)}
 
 
-def sync_detect_mtu(target):
+async def detect_mtu(target):
     start = 1450
     end = 1800
     logging.info(f">>>START Determine MTU using: {target}, scanning ({start}-{end})...")
+    try:
+        nxt = start
+        add = 20
+        while nxt < end:
+            res = ping(target, count=10, timeout=0.75, size=nxt, df=True)
+            logging.info(
+                f".........MTU check, size: {nxt}, packet loss: {100*round(res.packets_lost, 2)}%, target: {target}"
+            )
+            if res.packets_lost == 1.0:
+                if add == 1:
+                    logging.info(f"<<<DONE MTU: {nxt-1}")
+                    result = {"target": target, "mtu": nxt - 1}
+                    # await record_mtu(tstamp, result)
+                    return result
+                else:
+                    nxt -= add
+                    add = floor(add / 4)
 
-    next = start
-    add = 20
-    while next < end:
-        res = ping(target, count=10, timeout=0.75, size=next, df=True)
-        logging.info(
-            f".........MTU check, size: {next}, packet loss: {100*round(res.packets_lost, 2)}%, target: {target}"
-        )
-        if res.packets_lost == 1.0:
-            if add == 1:
-                logging.info(f"<<<DONE MTU: {next-1}")
-                return {"target": target, "mtu": next - 1}
-            else:
-                next -= add
-                add = floor(add / 4)
+            nxt += add
+            await asyncio.sleep(0.1)
 
-        next += add
-
-    return {
-        "host": target,
-        "mtu": "unknown",
-    }
+        return {
+            "host": target,
+            "mtu": "unknown",
+        }
+    except Exception as e:
+        logging.error(e)
+        return {}
 
 
 async def scan_for_wifi():
+    for i in range(3):
+        result = await iwlist_scan()
+        if result and len(result) > 0:
+            tstamp = get_timestamp()
+            for w in result:
+                w["tstamp"] = tstamp
+
+                await record_wifi(w)
+            return result
+
+        logging.info("WiFi scan failed...sleeping before trying again.")
+        await asyncio.sleep(0.5)
+
+    return []
+    # return await nmcli_scan()
+
+
+async def iwlist_scan():
+    device = get_config(WIFI_DEVICE) or DEFAULT_WIFI_DEVICE
+    # logging.info(f"Using WiFi device: {device}")
+    command = f"/usr/sbin/iwlist {device} scan last"
+    logging.info(f">>>START WiFi scanning...\n\n    {command}\n\n")
+    process = await asyncio.create_subprocess_shell(
+        command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    scan_output, stderr = await process.communicate()
+
+    # logging.info("Retrieving output from command")
+    err = stderr.decode("utf-8")
+    out = scan_output.decode("utf-8")
+
+    # logging.info(f"output from wifi scan:\n\n{out}\n\n")
+    # logging.info(f"error output from wifi scan:\n\n{err}\n\n")
+
+    if process.returncode != 0:
+        logging.error(f"Failed to scan for WiFi: {err.strip()}")
+        return []
+    else:
+        lines = out.splitlines()
+
+        result = []
+        current = None
+        for line in lines:
+            if re.match(r"\s*Cell \d+ - Address: [:0-9a-fA-F]{17}\s*", line):
+                # logging.info("Detected new network")
+                if current is not None and len(current.keys()) > 2:
+                    # logging.info(f"Appending current network: {current}")
+                    result.append(current)
+
+                current = {}
+            else:
+                parts = [p.strip() for p in re.split(r"\s*[:=]\s*", line)]
+
+                if parts[0] == "ESSID":
+                    current["ssid"] = parts[1][1:-1]
+                elif parts[0] == "Quality":
+                    qparts = [p.strip() for p in re.split(r"[ /]", parts[1])]
+
+                    strength = round((int(qparts[0]) / int(qparts[1])) * 100)
+                    current["str"] = strength
+                elif parts[0] == "Channel":
+                    current["chan"] = int(parts[1])
+
+        # logging.info(
+        #     f"<<<DONE WiFi scanning, {len(result)} networks found:\n\n{result}\n\n"
+        # )
+        return result
+
+
+async def nmcli_scan():
     logging.info(">>>START WiFi scanning...")
     process = await asyncio.create_subprocess_shell(
-        " ".join(
-            [
-                "nmcli",
-                "-t",
-                "-f",
-                "ssid,signal,freq,chan,in-use",
-                "device",
-                "wifi",
-                "list",
-            ]
-        ),
+        NMCLI_CMD,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -124,9 +188,7 @@ async def scan_for_wifi():
                 {
                     "ssid": parts[0],
                     "str": parts[1],
-                    # "frequency": parts[2],
-                    "chan": parts[3],
-                    # "in-use": parts[4] == "*",
+                    "chan": parts[2],
                 }
             )
 
@@ -134,63 +196,89 @@ async def scan_for_wifi():
         return result
 
 
-def run_speedtest():
+def get_timestamp():
+    return int(time.time())
+
+
+async def run_speedtest():
     logging.info(">>>START Speedtest...")
-    test = Speedtest()
-    test.get_best_server()
+    try:
+        tstamp = get_timestamp()
+        test = Speedtest()
+        test.get_best_server()
 
-    logging.info(".........Checking download speed")
-    test.download()
-    logging.info(".........Checking upload speed")
-    test.upload()
+        logging.info(".........Checking download speed")
+        test.download()
+        logging.info(".........Checking upload speed")
+        test.upload()
 
-    result = test.results.dict()
+        result = test.results.dict()
 
-    result["down_mbps"] = round(result["download"] / (1024 * 1024), 2)
-    result["up_mbps"] = round(result["upload"] / (1024 * 1024), 2)
+        result["tstamp"] = tstamp
+        result["down_mbps"] = round(result["download"] / (1024 * 1024), 2)
+        result["up_mbps"] = round(result["upload"] / (1024 * 1024), 2)
 
-    for key in [
-        "download",
-        "upload",
-        "bytes_sent",
-        "bytes_received",
-        "server",
-        "client",
-        "timestamp",
-        "share",
-    ]:
-        result.pop(key, None)
+        for key in [
+            "download",
+            "upload",
+            "bytes_sent",
+            "bytes_received",
+            "server",
+            "client",
+            "timestamp",
+            "share",
+        ]:
+            result.pop(key, None)
 
-    logging.info(f"<<<DONE Speedtest, {result['down_mbps']}/{result['up_mbps']}")
-    return result
+        logging.info(f"<<<DONE Speedtest, {result['down_mbps']}/{result['up_mbps']}")
+        await record_speed(result)
+        return result
+    except Exception as exception:
+        logging.error(exception)
+        return {}
+
+
+async def gather_uptimes():
+    uptimes = await asyncio.gather(
+        machine_uptime(),
+        service_uptime(),
+    )
+
+    uptime = {"machine": uptimes[0], "service": uptimes[1]}
+    return uptime
+
+
+async def probe_machine_info():
+    results = await asyncio.gather(detect_mtu("8.8.8.8"), gather_uptimes())
+
+    await record_machine_info(
+        {"mtu": results[0], "tstamp": get_timestamp(), "uptime": results[1]}
+    )
 
 
 async def run_probes():
     async with probe_semaphore:
-        loop = asyncio.get_event_loop()
-
         results = await asyncio.gather(
-            loop.run_in_executor(None, run_speedtest),
+            run_speedtest(),
+            probe_machine_info(),
             scan_for_wifi(),
-            loop.run_in_executor(None, sync_detect_mtu, "8.8.8.8"),
-            loop.run_in_executor(None, sync_ping, "8.8.8.8"),
-            loop.run_in_executor(None, sync_ping, "192.168.1.1"),
-            # loop.run_in_executor(None, sync_ping, "2001:4860:4860::8888")
+            run_ping("8.8.8.8"),
+            run_ping("192.168.1.1"),
         )
 
-        now = int(time.time())
         message = {
-            "tstamp": now,
+            "tstamp": get_timestamp(),
             "speed": results[0],
-            "wifi": results[1],
-            "MTU": results[2],
-            "ping": results[3:],
+            "MTU": results[1],
+            "uptime": results[2],
+            "wifi": results[3],
+            "ping": results[4:],
         }
 
-        logging.info(message)
+        # logging.info(message)
 
-        resultstr = json.dumps(message)
-        logging.info(f"Size of result info: {len(resultstr.encode('utf-8'))}")
+        # resultstr = json.dumps(message)
+        # logging.info(f"Size of result info: {len(resultstr.encode('utf-8'))}")
 
         return message
 
