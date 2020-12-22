@@ -5,8 +5,8 @@ with open('requirements.txt') as f:
 
 setup(
     name='netprobe',
-    version='1.0.1',
-    packages=[''],
+    version='1.0.2',
+    packages=['netprobe'],
     url='https://github.com/jdcasey/netprobe',
     license='GPLv3',
     author='John Casey',
@@ -14,9 +14,8 @@ setup(
     description='Runs various diagnostics on the local network connection, and exposes it via Telegram MTProto and/or '
                 'Google Firestore database records',
     install_requires=deps,
-    entry_points={
-        'console_scripts': [
-            'netprobe-run = netprobe.command:run'
-        ]
-    }
+    entry_points='''
+        [console_scripts]
+        netprobe-run=netprobe.command:run
+    '''
 )

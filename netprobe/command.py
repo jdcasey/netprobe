@@ -2,9 +2,9 @@
 
 import asyncio
 import click
-from .control import start_telegram
-from .config import load_config
-from .reporter import report_loop
+from netprobe.control import start_telegram
+from netprobe.config import load_config
+from netprobe.reporter import report_loop
 import logging
 
 logging.basicConfig(

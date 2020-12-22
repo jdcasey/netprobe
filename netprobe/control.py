@@ -4,8 +4,8 @@ from telethon.sessions import StringSession
 import logging
 from datetime import datetime, timedelta
 import asyncio
-from .probe import run_probes, get_my_ip, service_uptime, machine_uptime
-from .config import (
+from netprobe.probe import run_probes, get_my_ip, service_uptime, machine_uptime
+from netprobe.config import (
     get_config,
     ANNOUNCE_START,
     DEFAULT_ANNOUNCE_START,
@@ -14,9 +14,9 @@ from .config import (
     TELEGRAM_API_HASH,
     NODE_NAME,
 )
-from .formatter import format
-from .reporter import get_latest_report
-from .systrol import list_packages, upgrade_packages, reboot
+from netprobe.formatter import format
+from netprobe.reporter import get_latest_report
+from netprobe.systrol import list_packages, upgrade_packages, reboot
 from os import execv
 import sys
 

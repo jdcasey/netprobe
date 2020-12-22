@@ -1,5 +1,5 @@
-from .config import get_config, IP_REFLECTOR, WIFI_DEVICE, DEFAULT_WIFI_DEVICE
-from .database import record_speed, record_ping, record_wifi, record_machine_info
+from netprobe.config import get_config, IP_REFLECTOR, WIFI_DEVICE, DEFAULT_WIFI_DEVICE
+from netprobe.database import record_speed, record_ping, record_wifi, record_machine_info
 from speedtest import Speedtest
 from pythonping import ping
 import re

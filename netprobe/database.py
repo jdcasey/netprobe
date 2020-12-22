@@ -1,4 +1,4 @@
-from .config import get_config, NODE_NAME, WRITER_COUNT, DEFAULT_WRITER_COUNT
+from netprobe.config import get_config, NODE_NAME, WRITER_COUNT, DEFAULT_WRITER_COUNT
 import asyncio
 import logging
 from google.cloud import firestore

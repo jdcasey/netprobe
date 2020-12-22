@@ -1,6 +1,6 @@
-from .config import get_config, REPORTER_TIMEOUT, DEFAULT_REPORTER_TIMEOUT
-from .probe import run_probes
-from .database import start_database
+from netprobe.config import get_config, REPORTER_TIMEOUT, DEFAULT_REPORTER_TIMEOUT
+from netprobe.probe import run_probes
+from netprobe.database import start_database
 import asyncio
 import logging
 import time
