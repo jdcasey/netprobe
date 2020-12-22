@@ -116,7 +116,7 @@ async def scan_for_wifi():
 async def iwlist_scan():
     device = get_config(WIFI_DEVICE) or DEFAULT_WIFI_DEVICE
     # logging.info(f"Using WiFi device: {device}")
-    command = f"/usr/sbin/iwlist {device} scan last"
+    command = f"/usr/sbin/iwlist {device} scan"
     logging.info(f">>>START WiFi scanning...\n\n    {command}\n\n")
     process = await asyncio.create_subprocess_shell(
         command,
